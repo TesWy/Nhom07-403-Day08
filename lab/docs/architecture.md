@@ -106,7 +106,7 @@ Answer:
 ### LLM Configuration  
 | Tham số | Giá trị |
 |---------|---------|
-| Model | gpt-4o-mini (or gemini-1.5-flash fallback) |
+| Model | gpt-4o-mini |
 | Temperature | 0 |
 | Max tokens | 512 |
 | Fallback | Local LLM nếu API key không có |
