@@ -85,6 +85,25 @@ html, body, [class*="css"] {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Hero/sample prompt buttons in main content area — ensure readable contrast. */
+.stMain [data-testid="stBaseButton-secondary"] {
+  background-color: #f8faf8 !important;
+  border: 1px solid rgba(16, 23, 19, 0.15) !important;
+  color: #101713 !important;
+  color-scheme: light;
+}
+
+.stMain [data-testid="stBaseButton-secondary"] p,
+.stMain [data-testid="stBaseButton-secondary"] span,
+.stMain [data-testid="stBaseButton-secondary"] div {
+  color: #101713 !important;
+}
+
+.stMain [data-testid="stBaseButton-secondary"]:hover {
+  background-color: var(--accent-soft) !important;
+  border-color: rgba(30, 122, 77, 0.35) !important;
+}
+
 [data-testid="stSidebar"] .stRadio label {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -289,16 +308,63 @@ html, body, [class*="css"] {
   background: rgba(255, 255, 255, 0.55);
 }
 
-[data-testid="stChatInput"] {
-  background: transparent;
+/* ── Chat input bottom bar ───────────────────────────────── */
+[data-testid="stBottom"] {
+  background: #0c130f !important;
+  backdrop-filter: blur(18px) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: none !important;
+}
+
+[data-testid="stBottom"] > div {
+  background: transparent !important;
+}
+
+/* Kill Streamlit's red focus border on the chat input wrapper */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] *,
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] > div > div > div {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+/* But restore visible border only on the actual textarea */
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] input {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  caret-color: #edf6f0 !important;
+}
+[data-testid="stChatInput"] textarea:focus,
+[data-testid="stChatInput"] input:focus {
+  border-color: var(--accent) !important;
 }
 
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInput"] input {
   border-radius: 22px !important;
-  border: 1px solid var(--line) !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 16px 40px rgba(13, 20, 17, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #edf6f0 !important;
+  padding-left: 1.4rem !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+[data-testid="stChatInput"] textarea:focus,
+[data-testid="stChatInput"] input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(30, 122, 77, 0.18) !important;
+  outline: none !important;
+}
+
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInput"] input::placeholder {
+  color: rgba(237, 246, 240, 0.45) !important;
+  opacity: 1 !important;
 }
 
 @media (max-width: 900px) {
@@ -646,7 +712,7 @@ def main() -> None:
         main_prompt = _render_empty_state()
     _render_messages()
 
-    prompt = st.chat_input("Ask about SLA, refund, access control, HR policy...")
+    prompt = st.chat_input("Ask anything…")
     pending_prompt = prompt or sidebar_prompt or main_prompt
     if pending_prompt:
         _submit_prompt(pending_prompt)
