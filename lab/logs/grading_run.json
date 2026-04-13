@@ -1,0 +1,142 @@
+[
+  {
+    "id": "gq01",
+    "question": "SLA xử lý ticket P1 đã thay đổi như thế nào so với phiên bản trước?",
+    "answer": "Theo support/sla-p1-2026.pdf, SLA xử lý ticket P1 đã giảm thời gian khắc phục từ 6 giờ xuống 4 giờ kể từ phiên bản v2026.1 có hiệu lực từ ngày 15 tháng 1 năm 2026.",
+    "sources": [
+      "[1] support/sla-p1-2026.pdf | Phần 5: Lịch sử phiên bản | effective_date=2026-01-15",
+      "[2] support/sla-p1-2026.pdf | Phần 2: SLA theo mức độ ưu tiên | effective_date=2026-01-15",
+      "[3] support/sla-p1-2026.pdf | Phần 3: Quy trình xử lý sự cố P1 | effective_date=2026-01-15"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:55:56.568533"
+  },
+  {
+    "id": "gq02",
+    "question": "Khi làm việc remote, tôi phải dùng VPN và được kết nối trên tối đa bao nhiêu thiết bị?",
+    "answer": "Theo support/helpdesk-faq.md, mỗi tài khoản được kết nối VPN trên tối đa 2 thiết bị cùng lúc.",
+    "sources": [
+      "[1] support/helpdesk-faq.md | Section 2: VPN và kết nối từ xa | effective_date=2026-01-20",
+      "[2] hr/leave-policy-2026.pdf | Phần 4: Remote work policy | effective_date=2026-01-01",
+      "[3] it/access-control-sop.md | Section 2: Phân cấp quyền truy cập | effective_date=2026-01-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:55:59.363480"
+  },
+  {
+    "id": "gq03",
+    "question": "Đơn hàng mua trong chương trình Flash Sale và đã kích hoạt sản phẩm có được hoàn tiền không?",
+    "answer": "Theo policy/refund-v4.pdf, đơn hàng mua trong chương trình Flash Sale và đã kích hoạt sản phẩm sẽ không được hoàn tiền, vì sản phẩm đã áp dụng mã giảm giá đặc biệt và đã được kích hoạt.",
+    "sources": [
+      "[1] policy/refund-v4.pdf | Điều 3: Điều kiện áp dụng và ngoại lệ | effective_date=2026-02-01",
+      "[2] policy/refund-v4.pdf | Điều 2: Điều kiện được hoàn tiền | effective_date=2026-02-01",
+      "[3] policy/refund-v4.pdf | Điều 1: Phạm vi áp dụng | effective_date=2026-02-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:01.749447"
+  },
+  {
+    "id": "gq04",
+    "question": "Nếu chọn nhận store credit thay vì hoàn tiền, tôi được bao nhiêu phần trăm so với số tiền gốc?",
+    "answer": "Theo policy/refund-v4.pdf, nếu bạn chọn nhận store credit thay vì hoàn tiền, bạn sẽ nhận được giá trị 110% so với số tiền gốc.",
+    "sources": [
+      "[1] policy/refund-v4.pdf | Điều 5: Hình thức hoàn tiền | effective_date=2026-02-01",
+      "[2] policy/refund-v4.pdf | Điều 2: Điều kiện được hoàn tiền | effective_date=2026-02-01",
+      "[3] hr/leave-policy-2026.pdf | Phần 3: Chính sách làm thêm giờ | effective_date=2026-01-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:05.132706"
+  },
+  {
+    "id": "gq05",
+    "question": "Contractor từ bên ngoài công ty có thể được cấp quyền Admin Access không? Nếu có, cần bao nhiêu ngày và có yêu cầu đặc biệt gì?",
+    "answer": "Theo it/access-control-sop.md, contractor từ bên ngoài công ty có thể được cấp quyền Admin Access, nhưng cần phải có phê duyệt từ IT Manager và CISO, thời gian xử lý là 5 ngày làm việc, và yêu cầu thêm là phải hoàn thành training về security policy.",
+    "sources": [
+      "[1] it/access-control-sop.md | Section 2: Phân cấp quyền truy cập | effective_date=2026-01-01",
+      "[2] it/access-control-sop.md | Section 3: Quy trình yêu cầu cấp quyền | effective_date=2026-01-01",
+      "[3] it/access-control-sop.md | Section 4: Escalation khi cần thay đổi quyền hệ thống | effective_date=2026-01-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:07.508451"
+  },
+  {
+    "id": "gq06",
+    "question": "Lúc 2 giờ sáng xảy ra sự cố P1, on-call engineer cần cấp quyền tạm thời cho một engineer xử lý incident. Quy trình cụ thể như thế nào và quyền này tồn tại bao lâu?",
+    "answer": "Theo it/access-control-sop.md, trong trường hợp sự cố P1, on-call IT Admin có thể cấp quyền tạm thời cho một engineer sau khi được Tech Lead phê duyệt bằng lời, và quyền này tồn tại tối đa 24 giờ. Sau 24 giờ, quyền sẽ bị thu hồi tự động hoặc cần có ticket chính thức để duy trì.",
+    "sources": [
+      "[1] it/access-control-sop.md | Section 4: Escalation khi cần thay đổi quyền hệ thống | effective_date=2026-01-01",
+      "[2] support/sla-p1-2026.pdf | Phần 3: Quy trình xử lý sự cố P1 | effective_date=2026-01-15",
+      "[3] support/sla-p1-2026.pdf | Phần 4: Công cụ và kênh liên lạc | effective_date=2026-01-15"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:10.500304"
+  },
+  {
+    "id": "gq07",
+    "question": "Công ty sẽ phạt bao nhiêu nếu team IT vi phạm cam kết SLA P1?",
+    "answer": "Theo support/sla-p1-2026.pdf, nếu team IT vi phạm cam kết SLA P1, sẽ có các hình thức phạt cụ thể nhưng không được nêu rõ trong tài liệu. Không đủ dữ liệu.",
+    "sources": [
+      "[1] it/access-control-sop.md | Section 4: Escalation khi cần thay đổi quyền hệ thống | effective_date=2026-01-01",
+      "[2] it/access-control-sop.md | Section 2: Phân cấp quyền truy cập | effective_date=2026-01-01",
+      "[3] support/sla-p1-2026.pdf | Phần 2: SLA theo mức độ ưu tiên | effective_date=2026-01-15"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:13.476718"
+  },
+  {
+    "id": "gq08",
+    "question": "Nhân viên phải báo trước bao nhiêu ngày để xin nghỉ phép năm? Con số này có giống với số ngày cần giấy tờ khi nghỉ ốm không?",
+    "answer": "Theo hr/leave-policy-2026.pdf, nhân viên phải thông báo trước ít nhất 3 ngày làm việc để xin nghỉ phép năm, trong khi nghỉ ốm cần thông báo cho Line Manager trước 9:00 sáng ngày nghỉ và nếu nghỉ trên 3 ngày liên tiếp thì cần giấy tờ y tế. Do đó, số ngày báo trước không giống nhau.",
+    "sources": [
+      "[1] hr/leave-policy-2026.pdf | Phần 1: Các loại nghỉ phép | effective_date=2026-01-01",
+      "[2] hr/leave-policy-2026.pdf | Phần 2: Quy trình xin nghỉ phép | effective_date=2026-01-01",
+      "[3] hr/leave-policy-2026.pdf | Phần 4: Remote work policy | effective_date=2026-01-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:17.214079"
+  },
+  {
+    "id": "gq09",
+    "question": "Mật khẩu tài khoản công ty cần đổi định kỳ không? Nếu có, hệ thống sẽ nhắc nhở trước bao nhiêu ngày và đổi qua đâu?",
+    "answer": "Theo support/helpdesk-faq.md, mật khẩu tài khoản công ty cần được thay đổi mỗi 90 ngày và hệ thống sẽ nhắc nhở 7 ngày trước khi hết hạn.",
+    "sources": [
+      "[1] support/helpdesk-faq.md | Section 1: Tài khoản và mật khẩu | effective_date=2026-01-20",
+      "[2] it/access-control-sop.md | Section 5: Thu hồi quyền truy cập | effective_date=2026-01-01",
+      "[3] it/access-control-sop.md | Section 6: Audit và review định kỳ | effective_date=2026-01-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:19.575582"
+  },
+  {
+    "id": "gq10",
+    "question": "Chính sách hoàn tiền hiện tại áp dụng cho đơn hàng đặt trước ngày 01/02/2026 không?",
+    "answer": "Theo policy/refund-v4.pdf, chính sách hoàn tiền hiện tại chỉ áp dụng cho các đơn hàng được đặt từ ngày 01/02/2026 trở đi, còn các đơn hàng đặt trước ngày này sẽ áp dụng theo chính sách hoàn tiền phiên bản 3.",
+    "sources": [
+      "[1] policy/refund-v4.pdf | Điều 1: Phạm vi áp dụng | effective_date=2026-02-01",
+      "[2] policy/refund-v4.pdf | Điều 3: Điều kiện áp dụng và ngoại lệ | effective_date=2026-02-01",
+      "[3] policy/refund-v4.pdf | Điều 2: Điều kiện được hoàn tiền | effective_date=2026-02-01"
+    ],
+    "chunks_retrieved": 3,
+    "retrieval_mode": "hybrid",
+    "use_rerank": true,
+    "timestamp": "2026-04-13T17:56:23.047031"
+  }
+]
