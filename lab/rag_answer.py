@@ -1,16 +1,6 @@
 """
-rag_answer.py — Sprint 2 + Sprint 3: Retrieval & Grounded Answer
+rag_answer.py — Sprint 2 + Sprint 3: Retrieval & Grounded Answer (Bản cập nhật Metadata Filter)
 ================================================================
-Sprint 2 (60 phút): Baseline RAG
-  - Dense retrieval từ ChromaDB
-  - Grounded answer function với prompt ép citation
-  - Trả lời được ít nhất 3 câu hỏi mẫu, output có source
-
-Sprint 3 (60 phút): Tuning tối thiểu
-  - Thêm hybrid retrieval (dense + sparse/BM25)
-  - Hoặc thêm rerank (cross-encoder)
-  - Hoặc thử query transformation (expansion, decomposition, HyDE)
-  - Tạo bảng so sánh baseline vs variant
 """
 
 import json
@@ -114,17 +104,28 @@ def _dedupe_keep_best(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 # =============================================================================
-# RETRIEVAL — DENSE
+# RETRIEVAL — DENSE (Có hỗ trợ filter)
 # =============================================================================
 
-def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
+def retrieve_dense(
+    query: str, 
+    top_k: int = TOP_K_SEARCH,
+    meta_filter: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     collection = _get_collection()
     query_embedding = _embed_text(query)
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k,
-        include=["documents", "metadatas", "distances"],
-    )
+    
+    # Chuẩn bị kwargs cho truy vấn ChromaDB
+    query_kwargs = {
+        "query_embeddings": [query_embedding],
+        "n_results": top_k,
+        "include": ["documents", "metadatas", "distances"]
+    }
+    # Thêm bộ lọc metadata nếu có
+    if meta_filter:
+        query_kwargs["where"] = meta_filter
+
+    results = collection.query(**query_kwargs)
 
     docs = results.get("documents", [[]])[0]
     metas = results.get("metadatas", [[]])[0]
@@ -143,7 +144,7 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
 
 
 # =============================================================================
-# RETRIEVAL — SPARSE / BM25
+# RETRIEVAL — SPARSE / BM25 (Có hỗ trợ filter thủ công)
 # =============================================================================
 
 def _load_all_chunks() -> List[Dict[str, Any]]:
@@ -173,25 +174,42 @@ def _get_bm25_index():
     return _BM25_CACHE
 
 
-def retrieve_sparse(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]]:
+def retrieve_sparse(
+    query: str, 
+    top_k: int = TOP_K_SEARCH,
+    meta_filter: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     bm25, chunks = _get_bm25_index()
     tokenized_query = _tokenize(query)
     scores = bm25.get_scores(tokenized_query)
-    ranked_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-
-    formatted = []
-    for idx in ranked_indices:
-        score = float(scores[idx])
+    
+    scored_items = []
+    for idx, score in enumerate(scores):
         if score <= 0:
             continue
         chunk = chunks[idx]
-        formatted.append({
+        chunk_meta = chunk.get("metadata", {})
+        
+        # Nếu có filter, kiểm tra thủ công xem chunk có thỏa mãn không
+        if meta_filter:
+            match = True
+            for k, v in meta_filter.items():
+                if chunk_meta.get(k) != v:
+                    match = False
+                    break
+            if not match:
+                continue # Bỏ qua chunk này nếu không khớp filter
+
+        scored_items.append({
             "text": chunk["text"],
-            "metadata": chunk["metadata"],
-            "score": score,
+            "metadata": chunk_meta,
+            "score": float(score),
             "retrieval_method": "sparse",
         })
-    return formatted
+
+    # Sắp xếp lại theo điểm từ cao xuống thấp và lấy top_k
+    scored_items.sort(key=lambda x: x["score"], reverse=True)
+    return scored_items[:top_k]
 
 
 # =============================================================================
@@ -203,9 +221,11 @@ def retrieve_hybrid(
     top_k: int = TOP_K_SEARCH,
     dense_weight: float = 0.6,
     sparse_weight: float = 0.4,
+    meta_filter: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    dense_results = retrieve_dense(query, top_k=top_k)
-    sparse_results = retrieve_sparse(query, top_k=top_k)
+    # Truyền meta_filter xuống cả 2 hàm con
+    dense_results = retrieve_dense(query, top_k=top_k, meta_filter=meta_filter)
+    sparse_results = retrieve_sparse(query, top_k=top_k, meta_filter=meta_filter)
 
     fused: Dict[str, Dict[str, Any]] = {}
 
@@ -228,7 +248,7 @@ def retrieve_hybrid(
 
 
 # =============================================================================
-# RERANK
+# RERANK & QUERY TRANSFORMATION (Giữ nguyên)
 # =============================================================================
 
 def _load_cross_encoder():
@@ -278,11 +298,6 @@ def rerank(
             reverse=True,
         )
         return ranked[:top_k]
-
-
-# =============================================================================
-# QUERY TRANSFORMATION
-# =============================================================================
 
 def _parse_json_list(text: str) -> List[str]:
     text = (text or "").strip()
@@ -344,7 +359,7 @@ def transform_query(query: str, strategy: str = "expansion") -> List[str]:
 
 
 # =============================================================================
-# GENERATION
+# GENERATION (Đã cập nhật prompt Inline Citation)
 # =============================================================================
 
 def build_context_block(chunks: List[Dict[str, Any]]) -> str:
@@ -397,21 +412,6 @@ def _print_sources(sources: List[str]) -> None:
         print(f"  {source}")
 
 
-def _ensure_answer_markers(answer: str, chunks: List[Dict[str, Any]]) -> str:
-    if not answer or answer == NO_DATA_MESSAGE or not chunks:
-        return answer
-
-    if "[1]" in answer:
-        return answer
-
-    first_source = (chunks[0].get("metadata", {}) or {}).get("source", "unknown")
-    if answer.startswith(f"Theo {first_source},"):
-        return answer.replace(f"Theo {first_source},", f"Theo [1] {first_source},", 1)
-    if answer.startswith("Theo "):
-        return answer.replace("Theo ", "Theo [1] ", 1)
-    return answer
-
-
 def _filter_sources_by_answer(answer: str, sources: List[str]) -> List[str]:
     cited_indices = sorted({int(match) for match in re.findall(r"\[(\d+)\]", answer or "")})
     if not cited_indices:
@@ -425,16 +425,17 @@ def _filter_sources_by_answer(answer: str, sources: List[str]) -> List[str]:
 
 
 def build_grounded_prompt(query: str, context_block: str) -> str:
+    # Đã sửa đổi prompt để mượt mà hơn như đã thống nhất
     return f"""You are a helpful internal knowledge assistant.
 Answer only from the retrieved context below.
 If the context is insufficient, contradictory, or does not directly answer the question, reply exactly: "{NO_DATA_MESSAGE}"
 Do not use outside knowledge.
 
 Formatting rules:
-- Start with "Theo [1] [source file]," to ground the answer (e.g., "Theo [1] support/sla-p1-2026.pdf,")
+- Start with "Theo [source file]," to ground the answer (e.g., "Theo support/sla-p1-2026.pdf,")
 - Write in natural, concise Vietnamese — 1 to 2 sentences max
 - Include key numbers, deadlines, names directly in the sentence
-- If multiple snippets contribute, naturally connect them in one paragraph and keep markers like [1], [2]
+- If multiple snippets contribute, naturally connect them in one paragraph
 - Do NOT use bullet points or lists in the answer
 - Do NOT cite bracket numbers like [1] — the source name is the citation
 - Output ONLY the final answer
@@ -475,13 +476,18 @@ def call_llm(prompt: str) -> str:
     return (response.choices[0].message.content or "").strip()
 
 
-def _retrieve_by_mode(query: str, retrieval_mode: str, top_k: int) -> List[Dict[str, Any]]:
+def _retrieve_by_mode(
+    query: str, 
+    retrieval_mode: str, 
+    top_k: int,
+    meta_filter: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     if retrieval_mode == "dense":
-        return retrieve_dense(query, top_k=top_k)
+        return retrieve_dense(query, top_k=top_k, meta_filter=meta_filter)
     if retrieval_mode == "sparse":
-        return retrieve_sparse(query, top_k=top_k)
+        return retrieve_sparse(query, top_k=top_k, meta_filter=meta_filter)
     if retrieval_mode == "hybrid":
-        return retrieve_hybrid(query, top_k=top_k)
+        return retrieve_hybrid(query, top_k=top_k, meta_filter=meta_filter)
     raise ValueError(f"retrieval_mode không hợp lệ: {retrieval_mode}")
 
 
@@ -497,6 +503,7 @@ def rag_answer(
     use_rerank: bool = False,
     verbose: bool = False,
     transform_strategy: Optional[str] = None,
+    meta_filter: Optional[Dict[str, Any]] = None, # Đã thêm tham số này
 ) -> Dict[str, Any]:
     config = {
         "retrieval_mode": retrieval_mode,
@@ -504,6 +511,7 @@ def rag_answer(
         "top_k_select": top_k_select,
         "use_rerank": use_rerank,
         "transform_strategy": transform_strategy,
+        "meta_filter": meta_filter,
     }
 
     queries = [query]
@@ -512,7 +520,8 @@ def rag_answer(
 
     candidates: List[Dict[str, Any]] = []
     for q in queries:
-        retrieved = _retrieve_by_mode(q, retrieval_mode, top_k=top_k_search)
+        # Truyền meta_filter vào hàm tìm kiếm
+        retrieved = _retrieve_by_mode(q, retrieval_mode, top_k=top_k_search, meta_filter=meta_filter)
         for item in retrieved:
             new_item = dict(item)
             new_item["retrieved_for_query"] = q
@@ -525,7 +534,8 @@ def rag_answer(
     if verbose:
         print(f"\n[RAG] Query: {query}")
         print(f"[RAG] Retrieval mode: {retrieval_mode}")
-        print(f"[RAG] Expanded queries: {queries}")
+        if meta_filter:
+            print(f"[RAG] Meta Filter: {meta_filter}")
         print(f"[RAG] Retrieved {len(candidates)} candidates")
         for i, c in enumerate(candidates[:5], 1):
             meta = c.get("metadata", {}) or {}
@@ -553,13 +563,10 @@ def rag_answer(
 
     if verbose:
         print(f"[RAG] Selected {len(selected)} chunks")
-        print(f"\n[RAG] Prompt preview:\n{prompt[:800]}\n")
 
     answer = call_llm(prompt).strip()
     if not answer:
         answer = NO_DATA_MESSAGE
-    else:
-        answer = _ensure_answer_markers(answer, selected)
 
     sources = _filter_sources_by_answer(answer, _build_source_labels(selected))
 
@@ -607,21 +614,19 @@ def compare_retrieval_strategies(query: str) -> None:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Sprint 2 + 3: RAG Answer Pipeline")
+    print("Test: RAG Pipeline with Metadata Filter")
     print("=" * 60)
 
     test_queries = [
         "SLA xử lý ticket P1 là bao lâu?",
         "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?",
-        "Ai phải phê duyệt để cấp quyền Level 3?",
-        "ERR-403-AUTH là lỗi gì?",
     ]
 
-    print("\n--- Sprint 2: Test Baseline (Dense) ---")
+    print("\n--- Test 1: Không dùng Filter ---")
     for query in test_queries:
         print(f"\nQuery: {query}")
         try:
-            result = rag_answer(query, retrieval_mode="dense", verbose=True)
+            result = rag_answer(query, retrieval_mode="hybrid", verbose=True)
             print(f"Answer: {result['answer']}")
             print(f"Sources: {result['sources']}")
         # except NotImplementedError:
@@ -629,8 +634,20 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Lỗi: {e}")
 
-    print("\n--- Sprint 3: So sánh strategies ---")
+    print("\n--- Test 2: CÓ DÙNG FILTER (Ví dụ ép lấy file policy) ---")
+    query_filter = "Khách hàng có thể yêu cầu hoàn tiền trong bao nhiêu ngày?"
+    print(f"\nQuery: {query_filter}")
+    # Giả sử bạn chỉ muốn lục tìm trong file có tên là policy/refund-v4.pdf
+    my_filter = {"source": "policy/refund-v4.pdf"} 
+    
     try:
-        compare_retrieval_strategies("Approval Matrix để cấp quyền là tài liệu nào?")
+        result_filtered = rag_answer(
+            query=query_filter, 
+            retrieval_mode="hybrid", 
+            meta_filter=my_filter, # <<< Gọi bộ lọc tại đây
+            verbose=True
+        )
+        print(f"Answer: {result_filtered['answer']}")
+        _print_sources(result_filtered["sources"])
     except Exception as e:
-        print(f"Lỗi compare: {e}")
+        print(f"Lỗi filter: {e}")
