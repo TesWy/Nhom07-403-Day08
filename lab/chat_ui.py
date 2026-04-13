@@ -310,17 +310,26 @@ html, body, [class*="css"] {
 
 /* ── Chat input bottom bar ───────────────────────────────── */
 [data-testid="stBottom"] {
-  background: #0c130f !important;
-  backdrop-filter: blur(18px) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border: none !important;
+  background: linear-gradient(
+    to top,
+    rgba(248, 251, 247, 0.98) 0%,
+    rgba(248, 251, 247, 0.88) 100%
+  ) !important;
+  backdrop-filter: blur(24px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
+  border-top: 1px solid rgba(16, 23, 19, 0.08) !important;
+  box-shadow: 0 -6px 32px rgba(13, 20, 17, 0.06) !important;
+  padding: 0.8rem 0 0.5rem !important;
 }
 
 [data-testid="stBottom"] > div {
   background: transparent !important;
+  max-width: 780px !important;
+  margin: 0 auto !important;
+  padding: 0 1.25rem !important;
 }
 
-/* Kill Streamlit's red focus border on the chat input wrapper */
+/* Remove Streamlit's default wrapper borders/bg */
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] *,
 [data-testid="stChatInput"] > div,
@@ -331,40 +340,64 @@ html, body, [class*="css"] {
   box-shadow: none !important;
   outline: none !important;
 }
-/* But restore visible border only on the actual textarea */
-[data-testid="stChatInput"] textarea,
-[data-testid="stChatInput"] input {
-  border-color: rgba(255, 255, 255, 0.15) !important;
-  background: rgba(255, 255, 255, 0.07) !important;
-  caret-color: #edf6f0 !important;
-}
-[data-testid="stChatInput"] textarea:focus,
-[data-testid="stChatInput"] input:focus {
-  border-color: var(--accent) !important;
-}
 
+/* Actual input field */
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInput"] input {
-  border-radius: 22px !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  background: rgba(255, 255, 255, 0.07) !important;
-  color: #edf6f0 !important;
-  padding-left: 1.4rem !important;
-  box-shadow: none !important;
+  border-radius: 32px !important;
+  border: 1.5px solid rgba(16, 23, 19, 0.13) !important;
+  background: #ffffff !important;
+  color: #101713 !important;
+  caret-color: var(--accent) !important;
+  padding: 0.9rem 3.5rem 0.9rem 1.6rem !important;
+  font-size: 0.97rem !important;
+  line-height: 1.55 !important;
+  box-shadow:
+    0 2px 12px rgba(13, 20, 17, 0.07),
+    0 1px 3px rgba(13, 20, 17, 0.04) !important;
   outline: none !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
 }
 
 [data-testid="stChatInput"] textarea:focus,
 [data-testid="stChatInput"] input:focus {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(30, 122, 77, 0.18) !important;
+  box-shadow:
+    0 0 0 3px rgba(30, 122, 77, 0.13),
+    0 2px 16px rgba(13, 20, 17, 0.08) !important;
   outline: none !important;
 }
 
 [data-testid="stChatInput"] textarea::placeholder,
 [data-testid="stChatInput"] input::placeholder {
-  color: rgba(237, 246, 240, 0.45) !important;
+  color: rgba(16, 23, 19, 0.36) !important;
+  font-style: italic !important;
   opacity: 1 !important;
+}
+
+/* Send button */
+[data-testid="stChatInput"] button {
+  border-radius: 50% !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: none !important;
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 8px rgba(30, 122, 77, 0.28) !important;
+  transition: background 0.15s ease, transform 0.1s ease !important;
+}
+
+[data-testid="stChatInput"] button:hover {
+  background: #176840 !important;
+  transform: scale(1.06) !important;
+}
+
+[data-testid="stChatInput"] button svg {
+  fill: #fff !important;
+  stroke: #fff !important;
 }
 
 @media (max-width: 900px) {
