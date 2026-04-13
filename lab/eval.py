@@ -70,29 +70,66 @@ def score_faithfulness(
       3: Phần lớn grounded, một số thông tin có thể từ model knowledge
       2: Nhiều thông tin không có trong retrieved chunks
       1: Câu trả lời không grounded, phần lớn là model bịa
-
-    TODO Sprint 4 — Có 2 cách chấm:
-
-    Cách 1 — Chấm thủ công (Manual, đơn giản):
-        Đọc answer và chunks_used, chấm điểm theo thang trên.
-        Ghi lý do ngắn gọn vào "notes".
-
-    Cách 2 — LLM-as-Judge (Tự động, nâng cao):
-        Gửi prompt cho LLM:
-            "Given these retrieved chunks: {chunks}
-             And this answer: {answer}
-             Rate the faithfulness on a scale of 1-5.
-             5 = completely grounded in the provided context.
-             1 = answer contains information not in the context.
-             Output JSON: {'score': <int>, 'reason': '<string>'}"
-
-    Trả về dict với: score (1-5) và notes (lý do)
     """
-    # TODO Sprint 4: Implement scoring
-    # Tạm thời trả về None (yêu cầu chấm thủ công)
+    if not answer or answer == "Không đủ dữ liệu.":
+        # Abstain case - không có answer để chấm
+        return {
+            "score": 5,
+            "notes": "Abstain: Không đủ dữ liệu",
+        }
+
+    if not chunks_used:
+        # Không có chunks - không thể ground
+        return {
+            "score": 1,
+            "notes": "Không có chunks để ground answer",
+        }
+
+    # Kết hợp tất cả chunk text thành một khối
+    context_full = " ".join([c.get("text", "") for c in chunks_used]).lower()
+    answer_lower = answer.lower()
+
+    # Tính overlap: % từ trong answer xuất hiện trong context
+    import re
+    answer_tokens = set(re.findall(r"\b\w+\b", answer_lower))
+    context_tokens = set(re.findall(r"\b\w+\b", context_full))
+
+    # Bỏ các từ stopword phổ biến
+    stopwords = {"là", "có", "và", "để", "của", "được", "trong", "lên", "từ", "cơ",
+                 "với", "по", "trên", "dưới", "hoặc", "người", "nếu", "vì", "này", "đó",
+                 "không", "có", "như", "hay", "những", "theo", "sau", "trước", "thì"}
+    answer_tokens = {t for t in answer_tokens if t not in stopwords and len(t) > 2}
+    context_tokens = {t for t in context_tokens if t not in stopwords and len(t) > 2}
+
+    if not answer_tokens:
+        # Câu trả lời chỉ có stopwords
+        return {
+            "score": 3,
+            "notes": "Câu trả lời quá ngắn/đơn giản",
+        }
+
+    overlap = len(answer_tokens & context_tokens) / len(answer_tokens)
+
+    # Scoring logic: dựa trên overlap percentage
+    if overlap >= 0.9:
+        score = 5
+        note = "Rất tốt: gần như hoàn toàn grounded (>90%)"
+    elif overlap >= 0.7:
+        score = 4
+        note = "Tốt: phần lớn grounded (70-90%)"
+    elif overlap >= 0.5:
+        score = 3
+        note = "Trung bình: ~50-70% grounded"
+    elif overlap >= 0.3:
+        score = 2
+        note = "Kém: <50% grounded, có thể có bịa"
+    else:
+        score = 1
+        note = "Rất kém: <30% keywords từ context, chủ yếu bịa"
+
     return {
-        "score": None,
-        "notes": "TODO: Chấm thủ công hoặc implement LLM-as-Judge",
+        "score": score,
+        "notes": f"{note} (overlap={overlap:.1%})",
     }
 
 
@@ -110,12 +147,63 @@ def score_answer_relevance(
       3: Trả lời có liên quan nhưng chưa đúng trọng tâm
       2: Trả lời lạc đề một phần
       1: Không trả lời câu hỏi
-
-    TODO Sprint 4: Implement tương tự score_faithfulness
     """
+    if not answer or answer == "Không đủ dữ liệu.":
+        # Abstain case - không có answer
+        return {
+            "score": 5,
+            "notes": "Abstain: Không đủ dữ liệu",
+        }
+
+    # Tính keyword overlap giữa query và answer
+    import re
+    query_lower = query.lower()
+    answer_lower = answer.lower()
+
+    query_tokens = set(re.findall(r"\b\w+\b", query_lower))
+    answer_tokens = set(re.findall(r"\b\w+\b", answer_lower))
+
+    # Bỏ stopwords
+    stopwords = {"là", "có", "và", "để", "của", "được", "trong", "lên", "từ", "cơ",
+                 "với", "по", "trên", "dưới", "hoặc", "người", "nếu", "vì", "này", "đó",
+                 "không", "có", "như", "hay", "những", "theo", "sau", "trước", "thì", "bao",
+                 "nhiêu", "gì", "nào", "ai", "cái"}
+    query_tokens = {t for t in query_tokens if t not in stopwords and len(t) > 2}
+    answer_tokens = {t for t in answer_tokens if t not in stopwords and len(t) > 2}
+
+    if not query_tokens:
+        # Query quá ngắn/đơn giản
+        return {
+            "score": 3,
+            "notes": "Query quá ngắn",
+        }
+
+    # Overlap: bao nhiêu % tokens của query xuất hiện trong answer
+    overlap = len(query_tokens & answer_tokens) / len(query_tokens) if query_tokens else 0
+
+    # Cũng kiểm tra độ dài answer (không được quá ngắn)
+    answer_len = len(answer.split())
+
+    # Scoring
+    if overlap >= 0.6 and answer_len >= 5:
+        score = 5
+        note = "Rất tốt: trả lời trực tiếp, đầy đủ"
+    elif overlap >= 0.4 and answer_len >= 4:
+        score = 4
+        note = "Tốt: trả lời đúng nhưng có thể thiếu chi tiết"
+    elif overlap >= 0.3 and answer_len >= 3:
+        score = 3
+        note = "Trung bình: trả lời có liên quan nhưng chưa tập trung"
+    elif overlap >= 0.2:
+        score = 2
+        note = "Kém: trả lời có phần lạc đề"
+    else:
+        score = 1
+        note = "Rất kém: hầu như không trả lời câu hỏi"
+
     return {
-        "score": None,
-        "notes": "TODO: Implement score_answer_relevance",
+        "score": score,
+        "notes": f"{note} (query_overlap={overlap:.1%})",
     }
 
 
@@ -190,17 +278,70 @@ def score_completeness(
       3: Thiếu một số thông tin quan trọng
       2: Thiếu nhiều thông tin quan trọng
       1: Thiếu phần lớn nội dung cốt lõi
-
-    TODO Sprint 4:
-    Option 1 — Chấm thủ công: So sánh answer vs expected_answer và chấm.
-    Option 2 — LLM-as-Judge:
-        "Compare the model answer with the expected answer.
-         Rate completeness 1-5. Are all key points covered?
-         Output: {'score': int, 'missing_points': [str]}"
     """
+    if not answer or answer == "Không đủ dữ liệu.":
+        return {
+            "score": 5,
+            "notes": "Abstain: Không đủ dữ liệu",
+        }
+
+    if not expected_answer:
+        # Không có expected answer để so sánh
+        return {
+            "score": 3,
+            "notes": "Không có expected_answer để so sánh",
+        }
+
+    # Tính keyword overlap: % từ khóa của expected_answer xuất hiện trong answer
+    import re
+    expected_lower = expected_answer.lower()
+    answer_lower = answer.lower()
+
+    expected_tokens = set(re.findall(r"\b\w+\b", expected_lower))
+    answer_tokens = set(re.findall(r"\b\w+\b", answer_lower))
+
+    # Bỏ stopwords
+    stopwords = {"là", "có", "và", "để", "của", "được", "trong", "lên", "từ", "cơ",
+                 "với", "по", "trên", "dưới", "hoặc", "người", "nếu", "vì", "này", "đó",
+                 "không", "có", "như", "hay", "những", "theo", "sau", "trước", "thì", "bao",
+                 "nhiêu", "gì", "nào", "ai", "cái", "được", "được"}
+    expected_tokens = {t for t in expected_tokens if t not in stopwords and len(t) > 2}
+    answer_tokens = {t for t in answer_tokens if t not in stopwords and len(t) > 2}
+
+    if not expected_tokens:
+        # Expected answer chỉ có stopwords
+        return {
+            "score": 3,
+            "notes": "Expected answer quá ngắn",
+        }
+
+    # Overlap: bao nhiêu % key terms của expected_answer có trong answer
+    overlap = len(expected_tokens & answer_tokens) / len(expected_tokens)
+
+    # Cũng kiểm tra độ dài
+    expected_len = len(expected_answer.split())
+    answer_len = len(answer.split())
+
+    # Scoring
+    if overlap >= 0.8 and answer_len >= expected_len * 0.7:
+        score = 5
+        note = "Rất tốt: bao gồm đủ thông tin chính"
+    elif overlap >= 0.6 and answer_len >= expected_len * 0.6:
+        score = 4
+        note = "Tốt: thiếu 1 chi tiết nhỏ"
+    elif overlap >= 0.4 and answer_len >= expected_len * 0.5:
+        score = 3
+        note = "Trung bình: thiếu một số thông tin"
+    elif overlap >= 0.2:
+        score = 2
+        note = "Kém: thiếu nhiều thông tin quan trọng"
+    else:
+        score = 1
+        note = "Rất kém: thiếu phần lớn nội dung"
+
     return {
-        "score": None,
-        "notes": "TODO: Implement score_completeness (so sánh với expected_answer)",
+        "score": score,
+        "notes": f"{note} (coverage={overlap:.1%})",
     }
 
 
@@ -445,6 +586,8 @@ Generated: {timestamp}
 # =============================================================================
 
 if __name__ == "__main__":
+    import sys
+    
     print("=" * 60)
     print("Sprint 4: Evaluation & Scorecard")
     print("=" * 60)
@@ -464,10 +607,11 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("Không tìm thấy file test_questions.json!")
         test_questions = []
+        sys.exit(1)
 
     # --- Chạy Baseline ---
-    print("\n--- Chạy Baseline ---")
-    print("Lưu ý: Cần hoàn thành Sprint 2 trước khi chạy scorecard!")
+    print("\n--- Chạy Baseline (Dense Retrieval) ---")
+    baseline_results = []
     try:
         baseline_results = run_scorecard(
             config=BASELINE_CONFIG,
@@ -480,36 +624,49 @@ if __name__ == "__main__":
         baseline_md = generate_scorecard_summary(baseline_results, "baseline_dense")
         scorecard_path = RESULTS_DIR / "scorecard_baseline.md"
         scorecard_path.write_text(baseline_md, encoding="utf-8")
-        print(f"\nScorecard lưu tại: {scorecard_path}")
+        print(f"\n✓ Scorecard baseline lưu tại: {scorecard_path}")
 
-    except NotImplementedError:
-        print("Pipeline chưa implement. Hoàn thành Sprint 2 trước.")
-        baseline_results = []
+    except NotImplementedError as e:
+        print(f"Pipeline chưa implement: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Lỗi khi chạy baseline: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
-    # --- Chạy Variant (sau khi Sprint 3 hoàn thành) ---
-    # TODO Sprint 4: Uncomment sau khi implement variant trong rag_answer.py
-    # print("\n--- Chạy Variant ---")
-    # variant_results = run_scorecard(
-    #     config=VARIANT_CONFIG,
-    #     test_questions=test_questions,
-    #     verbose=True,
-    # )
-    # variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
-    # (RESULTS_DIR / "scorecard_variant.md").write_text(variant_md, encoding="utf-8")
+    # --- Chạy Variant ---
+    print("\n\n--- Chạy Variant (Hybrid + Rerank) ---")
+    variant_results = []
+    try:
+        variant_results = run_scorecard(
+            config=VARIANT_CONFIG,
+            test_questions=test_questions,
+            verbose=True,
+        )
+
+        variant_md = generate_scorecard_summary(variant_results, VARIANT_CONFIG["label"])
+        variant_path = RESULTS_DIR / "scorecard_variant.md"
+        variant_path.write_text(variant_md, encoding="utf-8")
+        print(f"\n✓ Scorecard variant lưu tại: {variant_path}")
+
+    except Exception as e:
+        print(f"Lỗi khi chạy variant: {e}")
+        import traceback
+        traceback.print_exc()
 
     # --- A/B Comparison ---
-    # TODO Sprint 4: Uncomment sau khi có cả baseline và variant
-    # if baseline_results and variant_results:
-    #     compare_ab(
-    #         baseline_results,
-    #         variant_results,
-    #         output_csv="ab_comparison.csv"
-    #     )
+    if baseline_results and variant_results:
+        print("\n\n")
+        compare_ab(
+            baseline_results,
+            variant_results,
+            output_csv="ab_comparison.csv"
+        )
+        print("\n✓ A/B comparison hoàn thành!")
+    else:
+        print("\nChưa thể so sánh A/B vì thiếu baseline hoặc variant results")
 
-    print("\n\nViệc cần làm Sprint 4:")
-    print("  1. Hoàn thành Sprint 2 + 3 trước")
-    print("  2. Chấm điểm thủ công hoặc implement LLM-as-Judge trong score_* functions")
-    print("  3. Chạy run_scorecard(BASELINE_CONFIG)")
-    print("  4. Chạy run_scorecard(VARIANT_CONFIG)")
-    print("  5. Gọi compare_ab() để thấy delta")
-    print("  6. Cập nhật docs/tuning-log.md với kết quả và nhận xét")
+    print("\n" + "="*60)
+    print("Sprint 4 Hoàn thành!")
+    print("="*60)
