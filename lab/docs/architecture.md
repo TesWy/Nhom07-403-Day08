@@ -26,23 +26,22 @@
 | `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
 | `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
 | `access_control_sop.txt` | it/access-control-sop.md | IT Security | 7 |
-| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 9 |
-| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 9 |
-| **Total** | | | **36** |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
+| **Total** | | | **29** |
 
 ### Quyết định chunking
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | 400 tokens (~1600 chars) | Cân bằng giữa context window và specificity |
-| Overlap | 80 tokens | Ngăn cắt giữa sections, duy trì continuity |
-| Chunking strategy | Heading-based + paragraph-based | Tôn trọng cấu trúc tài liệu (sections, clauses) |
+| Chunk size | 400 tokens | Cân bằng giữa context đủ lớn và độ chính xác retrieval |
+| Overlap | 80 tokenss | Giữ ngữ cảnh giữa các chunk, tránh mất thông tin khi bị cắt |
+| Chunking strategy | Heading-based + paragraph-based | Ưu tiên cấu trúc tự nhiên (section), fallback theo paragraph khi dài |
 | Metadata fields | source, section, department, effective_date, access | Phục vụ citation, filtering, freshness |
 
 ### Embedding model & Vector Store
-- **Model**: `paraphrase-multilingual-MiniLM-L12-v2` (local SentenceTransformers, 384-dim)
-- **Vector Store**: ChromaDB PersistentClient (local, không cần server)
+- **Model**: `text-embedding-3-small`
+- **Vector Store**: ChromaDB PersistentClient
 - **Similarity Metric**: Cosine distance
-- **Advantage**: No API key required, fast, multilingual support for Vietnamese
 
 ---
 
@@ -62,7 +61,7 @@
 ### Variant (Sprint 3): Hybrid + Rerank ✅
 | Tham số | Giá trị |  Thay đổi |
 |---------|---------|----------|
-| Strategy | Hybrid (Dense + BM25 RRF fusion) | **Dense → Hybrid** |
+| Strategy | Hybrid (Dense + BM25) | **Dense → Hybrid** |
 | Top-k search | 10 | Giữ nguyên |
 | Top-k select | 3 | Giữ nguyên |
 | Rerank | Cross-encoder (ms-marco-MiniLM-L-6-v2) | **Không → Có** |
@@ -84,19 +83,20 @@
 ```
 You are a helpful internal knowledge assistant.
 Answer only from the retrieved context below.
-If the context is insufficient, contradictory, or does not directly answer the question, 
-reply exactly: "Không đủ dữ liệu."
+If the context is insufficient, contradictory, or does not directly answer the question, reply exactly: "{NO_DATA_MESSAGE}"
 Do not use outside knowledge.
 
 Formatting rules:
-- Start with "Theo [1] [source file]," to ground the answer
-  (e.g., "Theo [1] support/sla-p1-2026.pdf,")
+- Start with "Theo [1] [source file]," to ground the answer (e.g., "Theo [1] support/sla-p1-2026.pdf,")
 - Write in natural, concise Vietnamese — 1 to 2 sentences max
-- Include key numbers, deadlines, names directly
-- Keep markers like [1], [2] for multiple sources
+- Include key numbers, deadlines, names directly in the sentence
+- If multiple snippets contribute, naturally connect them in one paragraph and keep markers like [1], [2]
+- Do NOT use bullet points or lists in the answer
+- Do NOT cite bracket numbers like [1] — the source name is the citation
 - Output ONLY the final answer
 
 Question: {query}
+
 Context:
 {context_block}
 
@@ -107,7 +107,7 @@ Answer:
 | Tham số | Giá trị |
 |---------|---------|
 | Model | gpt-4o-mini (or gemini-1.5-flash fallback) |
-| Temperature | 0 (cho output ổn định) |
+| Temperature | 0 |
 | Max tokens | 512 |
 | Fallback | Local LLM nếu API key không có |
 
@@ -173,11 +173,3 @@ SLA: 4.5 → 4.75  [Better escalation details]
 IT Helpdesk: 5.0 stable  [Strong across both]
 HR Policy: 4.0 → 4.75  [More complete info]
 ```
-
-### Learned Lessons
-1. ✅ Hybrid retrieval solves synonym/alias problems decisively
-2. ✅ Reranking improves completeness without sacrificing faithfulness
-3. ✅ Local embeddings (no API key) work well for specialized domains
-4. ❌ Dense-only insufficient for document with variant names
-
-**Recommendation:** Deploy variant for production.
