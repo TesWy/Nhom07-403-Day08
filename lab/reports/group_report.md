@@ -3,7 +3,7 @@ Nhóm: 7
 | Tên | MSHV | Role |
 |--------|--------|--------|
 | Huỳnh Lê Xuân Ánh | 2A202600083 | Documentation Owner |
-| Huỳnh Nhựt Huy | 2A202600084 | Tech Lead |
+| Huỳnh Nhựt Huy | 2A202600084 | Tech Lead, Retrieval Owner |
 | Huỳnh Khải Huy | 2A202600082 | Retrieval Owner |
 | Nguyễn Ngọc Hưng | 2A202600188 | Eval Owner |
 | Nguyễn Ngọc Khánh Duy | 2A202600189 | Retrieval Owner |
