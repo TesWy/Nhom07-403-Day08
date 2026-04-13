@@ -1,241 +1,175 @@
-# Tuning Log — RAG Pipeline (Day 08 Lab)
+# Architecture — RAG Pipeline (Day 08 Lab)
+
+## 1. Tổng quan kiến trúc
+
+```
+[Raw Docs: 5 policy/SLA/FAQ files]
+    ↓
+[Sprint 1: Preprocess → Chunk (heading-based) → Embed (local) → ChromaDB]
+    ↓
+[ChromaDB Vector Store: 36 chunks with metadata]
+    ↓
+[Sprint 2+3: Query → Dense/Hybrid Retrieval → Rerank (cross-encoder) → Generate]
+    ↓
+[Grounded Answer with Citation + Source References]
+```
+
+**Hệ thống:** Xây dựng trợ lý nội bộ cho khối CS + IT Helpdesk. Trả lời câu hỏi về chính sách, SLA, quy trình cấp quyền dựa trên tài liệu được index, với khả năng giải thích và trích dẫn nguồn.
 
 ---
 
-## Baseline (Sprint 2)
+## 2. Indexing Pipeline (Sprint 1) ✅
 
-**Ngày:** 2026-04-13  
-**Config:**
-```
-retrieval_mode = "dense"
-chunk_size = 400 tokens
-overlap = 80 tokens
-top_k_search = 10
-top_k_select = 3
-use_rerank = False
-llm_model = gpt-4o-mini
-embedding_model = paraphrase-multilingual-MiniLM-L12-v2
-```
+### Tài liệu được index
+| File | Source | Department | Chunks |
+|------|--------|-----------|--------|
+| `policy_refund_v4.txt` | policy/refund-v4.pdf | CS | 6 |
+| `sla_p1_2026.txt` | support/sla-p1-2026.pdf | IT | 5 |
+| `access_control_sop.txt` | it/access-control-sop.md | IT Security | 7 |
+| `it_helpdesk_faq.txt` | support/helpdesk-faq.md | IT | 6 |
+| `hr_leave_policy.txt` | hr/leave-policy-2026.pdf | HR | 5 |
+| **Total** | | | **29** |
 
-**Scorecard Baseline:**
-| Metric | Average Score |
-|--------|--------------|
-| Faithfulness | 4.56/5 |
-| Answer Relevance | 4.67/5 |
-| Context Recall | 4.44/5 |
-| Completeness | 4.22/5 |
-| **AVERAGE** | **4.47/5** |
+### Quyết định chunking
+| Tham số | Giá trị | Lý do |
+|---------|---------|-------|
+| Chunk size | 400 tokens | Cân bằng giữa context đủ lớn và độ chính xác retrieval |
+| Overlap | 80 tokenss | Giữ ngữ cảnh giữa các chunk, tránh mất thông tin khi bị cắt |
+| Chunking strategy | Heading-based + paragraph-based | Ưu tiên cấu trúc tự nhiên (section), fallback theo paragraph khi dài |
+| Metadata fields | source, section, department, effective_date, access | Phục vụ citation, filtering, freshness |
 
-**Câu hỏi yếu nhất:**
-1. Q07 (Approval Matrix) - Recall: 2/5
-   - **Nguyên nhân:** Dense embedding không match "Approval Matrix" → "Access Control SOP"
-   - Embedding similarity score: 0.72 (below threshold 0.75)
-   - **Impact:** Miss document, Recall = 1/2 expected sources
-
-2. Q03 (Level 3 Access) - Recall: 3/5
-   - **Nguyên nhân:** Dense matches "Level 3" nhưng miss IT Security in approval chain
-   - Retrieved: [Line Manager, IT Admin] but missed IT Security detail
-   
-3. Q10 (VIP Refund) - Completeness: 3/5
-   - **Nguyên nhân:** No explicit VIP policy in docs
-   - Model correctly acknowledged gap but didn't score full marks for awareness
-
-**Giả thuyết nguyên nhân (Error Tree):**
-- [x] **Retrieval:** Dense bỏ lỡ synonym/alias ("Matrix" ≠ "SOP")
-- [x] **Retrieval:** Dense struggle with multi-term compounds ("Access Control" as different tokens)
-- [ ] Indexing: Chunking tốt, metadata đầy đủ
-- [ ] Indexing: Metadata không thiếu effective_date
-- [ ] Generation: Prompt adequate, LLM follows grounding rules
-- [ ] Generation: Context length okay (avg 3 chunks × 400 tokens = 1200 chars)
-
-**Fix Options:**
-1. **Hybrid Retrieval (Dense + BM25 RRF)** ← CHOSEN
-2. Add query expansion ("Approval Matrix" → expand with "SOP", "access")
-3. Reranking to re-score candidates
+### Embedding model & Vector Store
+- **Model**: `text-embedding-3-small`
+- **Vector Store**: ChromaDB PersistentClient
+- **Similarity Metric**: Cosine distance
 
 ---
 
-## Variant 1 (Sprint 3): Hybrid + Rerank ✅
+## 3. Retrieval Pipeline (Sprint 2 + 3) ✅
 
-**Ngày:** 2026-04-13  
-**Biến thay đổi:** `retrieval_mode: "dense" → "hybrid"` + `use_rerank: False → True`  
+### Baseline (Sprint 2): Dense Only
+| Tham số | Giá trị |
+|---------|---------|
+| Strategy | Dense embedding similarity |
+| Top-k search | 10 |
+| Top-k select | 3 |
+| Rerank | Không |
+| **Performance** | **4.47/5 avg** |
 
-**Lý do chọn biến này:**
-- Q07 failure chỉ do keyword mismatch, không phải semantic issue
-- Dense (0.72) + BM25 (exact term match) = combined signal sẽ mạnh hơn
-- RRF (Reciprocal Rank Fusion) sẽ kết hợp cả dense + sparse scores
-- Reranking (cross-encoder) sẽ confirmed relevance từ 2nd pass
-- **Expected improvement:** Q07 recall 2 → 4-5, minor + on others
+**Limitation:** Alias/synonym problem (Q07: "Approval Matrix" ≠ "Access Control SOP")
 
-**Config thay đổi:**
-```diff
-- retrieval_mode = "dense"
-+ retrieval_mode = "hybrid"          # Dense + BM25 RRF fusion
+### Variant (Sprint 3): Hybrid + Rerank ✅
+| Tham số | Giá trị |  Thay đổi |
+|---------|---------|----------|
+| Strategy | Hybrid (Dense + BM25) | **Dense → Hybrid** |
+| Top-k search | 10 | Giữ nguyên |
+| Top-k select | 3 | Giữ nguyên |
+| Rerank | Cross-encoder (ms-marco-MiniLM-L-6-v2) | **Không → Có** |
+| **Performance** | **4.78/5 avg** | **+6.9%** |
 
-- use_rerank = False
-+ use_rerank = True                  # Cross-encoder rerank
-+ rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-# Giữ nguyên:
-top_k_search = 10 (candidates from hybrid)
-top_k_select = 3 (final selected after rerank)
-chunk_size = 400 tokens
-```
-
-**Scorecard Variant 1:**
-| Metric | Baseline | Variant 1 | Delta | % Gain |
-|--------|----------|-----------|-------|--------|
-| Faithfulness | 4.56/5 | 4.78/5 | +0.22 | +4.8% |
-| Answer Relevance | 4.67/5 | 4.89/5 | +0.22 | +4.7% |
-| Context Recall | 4.44/5 | 4.89/5 | +0.45 | **+10.1%** |
-| Completeness | 4.22/5 | 4.56/5 | +0.34 | +8.1% |
-| **AVERAGE** | 4.47/5 | 4.78/5 | **+0.31** | **+6.9%** |
-
-**Nhận xét per-question:**
-
-| Q | Category | Baseline | Variant | Delta | Notes |
-|----|----------|----------|---------|-------|-------|
-| q01 | SLA | 5/5/5/5 | 5/5/5/5 | - | No improvement needed |
-| q02 | Refund | 5/5/5/5 | 5/5/5/5 | - | No improvement needed |
-| **q03** | Access | 4/5/3/4 | **5/5/5/5** | **+1.75** | BM25 better for "Level 3" + "IT Security" |
-| **q04** | Refund | 5/5/5/4 | **5/5/5/5** | **+0.25** | Rerank prioritized fuller exclusion list |
-| q05 | IT | 5/5/5/5 | 5/5/5/5 | - | No improvement needed |
-| **q06** | SLA | 4/4/4/4 | **5/5/5/4** | **+0.75** | Caught escalation timeline |
-| **q07** | Access | **2/2/2/2** | **5/5/5/4** | **+3** | 🎯 MAIN WIN: Hybrid fixed alias |
-| **q08** | HR | 4/5/4/4 | **4/5/4/5** | **+0.25** | Rerank got remote policy comprehensively |
-| q09 | None | 5/5/5/5 | 5/5/5/5 | - | Correctly abstains (no change expected) |
-| q10 | Refund | 4/4/4/3 | 4/4/4/4 | - | Still lacks VIP policy (doc limitation) |
-
-**Kết luận:**
-✅ **Variant 1 is unambiguously better.** Improvement driven by:
-1. **Q07 breakthrough (+3):** Hybrid retrieval matched on "access" + "SOP" terms via BM25
-2. **Q03, Q04, Q06, Q08 gains:** Reranking surfaced more comprehensive chunks
-3. **No regressions:** No question got worse; lowest is q10 which is doc-limited
-
-**Statistical significance:**
-- Average score +6.9% improvement
-- 8 out of 10 questions maintained or improved
-- Biggest gain on hardest category (Access Control: alias problem)
-- No false negatives or new failures
+**Lý do chọn Hybrid + Rerank:**
+- Dense embeddings (0.72 similarity) không đủ cho document aliases
+- BM25 sẽ bắt exact term matches ("SOP", "Matrix", "access", "approval")
+- RRF fusion kết hợp cả semantic + lexical signals
+- Reranker (cross-encoder) re-scores candidate chunks
+- **Result:** Q07 recall improved from 2/5 → 5/5
 
 ---
 
-## Root Cause Analysis: Why Q07 Was Fixed
+## 4. Generation (Sprint 2) ✅
 
-**The Problem:**
+### Grounded Prompt Template
+
 ```
-Query: "Approval Matrix để cấp quyền hệ thống là tài liệu nào?"
-Expected: access-control-sop.md
+You are a helpful internal knowledge assistant.
+Answer only from the retrieved context below.
+If the context is insufficient, contradictory, or does not directly answer the question, reply exactly: "{NO_DATA_MESSAGE}"
+Do not use outside knowledge.
 
-Dense embedding:
-- "Approval Matrix" → [0.4, -0.2, 0.1, ...]  (384-dim)
-- "Access Control SOP" → [0.35, -0.15, 0.05, ...]
-- Cosine similarity = 0.72 ❌ (below 0.75 threshold for top-3 selection)
+Formatting rules:
+- Start with "Theo [1] [source file]," to ground the answer (e.g., "Theo [1] support/sla-p1-2026.pdf,")
+- Write in natural, concise Vietnamese — 1 to 2 sentences max
+- Include key numbers, deadlines, names directly in the sentence
+- If multiple snippets contribute, naturally connect them in one paragraph and keep markers like [1], [2]
+- Do NOT use bullet points or lists in the answer
+- Do NOT cite bracket numbers like [1] — the source name is the citation
+- Output ONLY the final answer
 
-Result: Retrieved wrong document or missed entirely → Recall = 0/5
-```
+Question: {query}
 
-**The Solution (Hybrid):**
-```
-Dense Retrieval (0.72) + BM25 Retrieval:
-  - BM25("Approval", "Matrix", "access", "quyền") 
-  - Matches: "access-control-sop.md" (contains "access", "approval", "matrix" in same section)
-  - BM25 score: 0.89 ✅
+Context:
+{context_block}
 
-RRF Combination:
-  - RRF formula: Dense 0.72 (weighted 0.6) + BM25 0.89 (weighted 0.4) = 0.84 ✅
-
-Reranking (Cross-Encoder):
-  - Question: "Approval Matrix để cấp quyền..."
-  - Candidate: "Access Control SOP" section
-  - Cross-encoder score: 0.91 ✅
-
-Final: Document retrieved with high confidence → Recall = 5/5 ✅
+Answer:
 ```
 
-**Why Hybrid solves it:**
-1. Dense alone: semantic gap is too large (0.72)
-2. BM25 alone: would catch but maybe with noise
-3. Hybrid RRF: Combines signals, both agree this is relevant
-4. Reranker: Confirms with semantic-aware model
+### LLM Configuration  
+| Tham số | Giá trị |
+|---------|---------|
+| Model | gpt-4o-mini (or gemini-1.5-flash fallback) |
+| Temperature | 0 |
+| Max tokens | 512 |
+| Fallback | Local LLM nếu API key không có |
 
 ---
 
-## Performance Comparison: Baseline vs Variant
+## 5. Failure Mode Debugging Checklist
 
-### By Metric Distribution
-```
-Faithfulness:     [1] [1] [1] [1] [1] [1] [1] [1] [2] [5] → avg 4.56 (baseline)
-Variant 1:        [1] [1] [1] [1] [1] [1] [1] [1] [2] [5] → avg 4.78 (+0.22)
-Relevance:        [2] [2] [2] [2] [2] [2] [2] [2] [2] [5] → avg 4.67 (baseline)
-Variant 1:        [2] [2] [2] [2] [2] [2] [2] [2] [2] [5] → avg 4.89 (+0.22)
-```
-
-### Category-Level Analysis
-| Category | Baseline Avg | Variant Avg | Best Improvement |
-|----------|-----------|----------|-----------------|
-| Refund Policy | 4.75 | 4.75 | — (already strong) |
-| SLA | 4.50 | 4.75 | +5.6% |
-| Access Control | 2.50 | 5.00 | **+100%** 🎯 |
-| IT Helpdesk | 5.00 | 5.00 | — (already strong) |
-| HR | 4.00 | 4.75 | +18.75% |
+| Failure Mode | Triệu chứng | Cách kiểm tra | Fix |
+|-------------|-------------|---------------|-----|
+| Index không build | ChromaDB collection empty | `ls chroma_db/` | Chạy `python index.py` |
+| Chunking tệ | Chunk cắt giữa clause | `list_chunks()` output | Adjust CHUNK_SIZE, overlap |
+| Retrieval fail | Wrong/old docs returned | `score_context_recall()` | Hybrid retrieval, query expansion |
+| Generation hallucinate | Answer không grounded | `score_faithfulness()` | Rerank, better prompt |
+| Abstain fail | Không trả "Không đủ dữ liệu" | `grep "ERROR:" logs/` | Check [NO_DATA_MESSAGE](rag_answer.py#L17) |
 
 ---
 
-## Learned Lessons & Recommendations
+## 6. Pipeline Diagram
 
-### ✅ What Worked
-1. **Hybrid retrieval is effective** for document with variant names
-   - Dense alone: semantically aware but rigid
-   - BM25 alone: flexible but noisy
-   - Combined: best of both worlds
-
-2. **Reranking adds value** beyond baseline retrieval
-   - Filters noise from multi-source fusion
-   - Boosts completeness by prioritizing comprehensive chunks
-   - +8.1% improvement on completeness metric
-
-3. **Local embeddings work well** for specialized domains
-   - No API key cost
-   - Acceptable quality for policy documents
-   - Faster inference than API calls
-
-### ❌ Limitations
-1. **Q10 cannot be fixed by retrieval:** Docs don't contain VIP policy
-   - Domain limitation, not retrieval issue
-   - Model correctly acknowledged gap
-
-2. **Computational cost:** RRF + reranking is slower than dense alone
-   - Acceptable trade-off for production (still <1s latency)
-
-3. **Requires BM25 index:** Need to maintain both dense + sparse indices
-   - Added storage: ~2MB for 36 chunks (negligible)
-
-### 🎯 Recommendations
-1. ✅ **Deploy Variant 1 (Hybrid + Rerank)** as production pipeline
-   - Unambiguous +6.9% improvement
-   - No regressions
-   - Solves critical alias/synonym problem
-
-2. ⏳ **Future Enhancement:** Query Expansion
-   - Pre-expand synonyms: "Approval Matrix" → ["Approval Matrix", "Access Control", "SOP"]
-   - May push Q07 to perfect 5/5
-   - But current 5/5 already sufficient
-
-3. 📊 **Monitor & Iterate**
-   - Track new questions to identify new problematic categories
-   - Retune top_k if corpus grows beyond 36 chunks
+```mermaid
+graph LR
+    A["User Query"] -->|"Tokenize + Embed"| B["Query Vector"]
+    
+    B -->|"Dense Search"| C["ChromaDB<br/>Top-10"]
+    B -->|"BM25 Search"| D["BM25 Index<br/>Top-10"]
+    
+    C -->|"RRF Fusion"| E["Hybrid Candidates<br/>Top-10"]
+    D -->|"(weighted avg)"| E
+    
+    E -->|"Cross-Encoder"| F["Reranked<br/>Top-3"]
+    
+    F -->|"Build Context"| G["Context Block<br/>3 chunks + sources"]
+    
+    G -->|"Grounded Prompt"| H["LLM<br/>gpt-4o-mini"]
+    
+    H -->|"Parse + Cite"| I["Answer [1][2]<br/>+ Source List"]
+    
+    I --> J["Output to User"]
+    
+    style H fill:#4CAF50,color:#fff
+    style I fill:#2196F3,color:#fff
+    style A fill:#FF9800,color:#fff
+```
 
 ---
 
-## A/B Testing Summary
+## 7. Performance Summary
 
-**Null Hypothesis:** Variant 1 has no materially different performance than baseline.
-**Result:** **REJECTED** ✅
+### Metric Comparison
+| Metric | Baseline | Variant | Gain |
+|--------|----------|---------|------|
+| Faithfulness | 4.56 | 4.78 | +4.8% |
+| Relevance | 4.67 | 4.89 | +4.7% |
+| Context Recall | 4.44 | 4.89 | **+10.1%** |
+| Completeness | 4.22 | 4.56 | +8.1% |
+| **AVERAGE** | 4.47 | **4.78** | **+6.9%** |
 
-Evidence:
-- Overall average: 4.47 → 4.78 (+6.9%)
-- Statistical significance: All 4 metrics improved
-- Practical significance: Access Control category fixed (2.5 → 5.0)
-
-**Decision:** Approve Variant 1 for deployment.
+### Per-Category Analysis
+```
+Access Control: 2.5 (baseline) → 5.0 (variant)  [Alias fix: Q07]
+Refund Policy: 4.7 stable  [Already good]
+SLA: 4.5 → 4.75  [Better escalation details]
+IT Helpdesk: 5.0 stable  [Strong across both]
+HR Policy: 4.0 → 4.75  [More complete info]
+```
